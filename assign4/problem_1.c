@@ -114,8 +114,11 @@ void play(void) {
   int i;
   for (i=0; i<10; i++) {
     assert(cats >= 0 && cats <= n_cats);
+    //printf("cats %i\n",cats);
     assert(dogs >= 0 && dogs <= n_dogs);
+    //printf("dogs %i\n",dogs);
     assert(birds >= 0 && birds <= n_birds);
+    //printf("birds %i\n",birds);
     assert(cats == 0 || dogs == 0);
     assert(cats == 0 || birds == 0);
   }
