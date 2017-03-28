@@ -6,6 +6,11 @@
 #include <errno.h>
 #include <stdint.h>
 
+typedef struct dirent_list
+{
+    struct dirent* entry;
+    struct dirent_list* next;
+} dirent_list;
 
 static uint32_t crc32_tab[] = {
 	0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -67,6 +72,86 @@ uint32_t crc32(uint32_t crc, const void *buf, size_t size)
 }
 
 
+void sortedInsert(struct dirent_list** head_ref, struct dirent_list* new_node)
+{
+    struct dirent_list* current;
+    /* Special case for the head end */
+    if (*head_ref == NULL || (strcmp((*head_ref)->entry->d_name, new_node->entry->d_name) >= 0))
+    {
+        new_node->next = *head_ref;
+        *head_ref = new_node;
+    }
+    else
+    {
+        /* Locate the node before the point of insertion */
+        current = *head_ref;
+        while (current->next!=NULL && (strcmp(current->next->entry->d_name,new_node->entry->d_name) < 0))
+        {
+            current = current->next;
+        }
+        new_node->next = current->next;
+        current->next = new_node;
+    }
+}
+
+void print_List_CheckSum(struct dirent_list *head, char* dir_name)
+{
+    struct dirent_list* curr = head;
+    while(curr != NULL)
+    {
+        int error = 0;
+        char abs_path[PATH_MAX+1];
+        strcpy(abs_path,dir_name);
+        strcat(abs_path,curr->entry->d_name);
+
+        FILE* f = fopen(abs_path, "r");
+        if(f==NULL)
+        {
+            printf("%s ACCESS ERROR\n", curr->entry->d_name);
+        }
+        else{
+            char buf[1024];
+            uint32_t sum = 0;
+            while(1)
+            {
+	      int read = fread(buf,1,1024,f);
+                if(ferror(f) != 0)
+                {
+                    printf("%s ERROR READING\n", curr->entry->d_name);
+                    error = 1;
+                    break;
+                }
+
+                sum = crc32(sum,buf,read);
+                if(read < 1024)
+                    break;
+
+            }
+            if(!error){
+                printf("%s %08X\n", curr->entry->d_name, sum);
+                error = 0;
+            }
+
+            if(fclose(f)!=0)
+            {
+                printf("Error closing file %s",curr->entry->d_name);
+                
+            }
+
+        }
+
+        curr = curr->next;
+    }
+}
+void printList(struct dirent_list *head)
+{
+    struct dirent_list *temp = head;
+    while(temp != NULL)
+    {
+        printf("%s\n", temp->entry->d_name);
+        temp = temp->next;
+    }
+}
 
 int main(int argc, char* argv[])
 {
@@ -92,17 +177,21 @@ int main(int argc, char* argv[])
                  dir_name, strerror (errno));
         exit (EXIT_FAILURE);
     }
-    while (1) {
-        struct dirent * file;
-        
-        file = readdir(d);
-        if (!file) {
-            printf("Failed to read file");
-            break;
+    struct dirent_list* root = NULL;
+    struct dirent * file;
+    while ((file = readdir(d)) != NULL) {
+
+    	//now add to linked list of files
+        if(file->d_type != DT_DIR ){
+        	struct dirent_list* new_node = (dirent_list*) malloc(sizeof(struct dirent_list));
+        	new_node->entry = file;
+        	//printf("%s\n", new_node->entry->d_name);
+        	sortedInsert(&root,new_node);
         }
-        if(file->d_type != DT_DIR )
-            printf ("%s\n", file->d_name);
     }
+
+    printList(root);
+    print_List_CheckSum(root,dir_name);
     /* Close the directory. */
     if (closedir (d)) {
         fprintf (stderr, "Could not close '%s': %s\n",
