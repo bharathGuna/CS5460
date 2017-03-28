@@ -99,40 +99,30 @@ void print_List_CheckSum(struct dirent_list *head, char* dir_name)
     struct dirent_list* curr = head;
     while(curr != NULL)
     {
-        int error = 0;
+        
         char abs_path[PATH_MAX+1];
         strcpy(abs_path,dir_name);
         strcat(abs_path,curr->entry->d_name);
 
-        FILE* f = fopen(abs_path, "r");
-        if(f==NULL)
+        FILE* file = fopen(abs_path, "r");
+        if(file==NULL)
         {
             printf("%s ACCESS ERROR\n", curr->entry->d_name);
         }
         else{
-            char buf[1024];
-            uint32_t sum = 0;
-            while(1)
-            {
-	      int read = fread(buf,1,1024,f);
-                if(ferror(f) != 0)
-                {
-                    printf("%s ERROR READING\n", curr->entry->d_name);
-                    error = 1;
-                    break;
-                }
-
-                sum = crc32(sum,buf,read);
-                if(read < 1024)
-                    break;
-
-            }
-            if(!error){
-                printf("%s %08X\n", curr->entry->d_name, sum);
-                error = 0;
-            }
-
-            if(fclose(f)!=0)
+           
+           
+	    fseek(file, 0, SEEK_END);
+      
+	    long buf_size = ftell(file);
+	    char buf[buf_size];
+	    fseek(file,0, SEEK_SET);
+	    uint32_t sum = 0;
+	    int read = fread(buf, 1, buf_size, file);
+	    sum = crc32(sum, buf, read);
+            printf("%s %08X\n", curr->entry->d_name, sum);
+            
+            if(fclose(file)!=0)
             {
                 printf("Error closing file %s",curr->entry->d_name);
                 
@@ -141,15 +131,6 @@ void print_List_CheckSum(struct dirent_list *head, char* dir_name)
         }
 
         curr = curr->next;
-    }
-}
-void printList(struct dirent_list *head)
-{
-    struct dirent_list *temp = head;
-    while(temp != NULL)
-    {
-        printf("%s\n", temp->entry->d_name);
-        temp = temp->next;
     }
 }
 
@@ -166,7 +147,7 @@ int main(int argc, char* argv[])
          dir_name = strcat(dir_name,"/");
     
     DIR * d;
-    printf("%s\n",dir_name);
+    //printf("%s\n",dir_name);
 
     /* Open the current directory. */
 
@@ -190,7 +171,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    printList(root);
+    //printList(root);
     print_List_CheckSum(root,dir_name);
     /* Close the directory. */
     if (closedir (d)) {
@@ -201,3 +182,4 @@ int main(int argc, char* argv[])
 
     return 0;
 }
+ 
