@@ -7,21 +7,21 @@
 #include <stdint.h>
 #include <pthread.h>
 
-typedef struct dirent_list
+typedef struct list
 {   
     char*  text;
     char*  dir;
     struct dirent* entry;
-    struct dirent_list* next;
-} dirent_list;
+    struct list* next;
+} list;
 
 typedef struct thread_data
 {
-    dirent_list* file;
+    list* file;
     pthread_mutex_t* lock;
 } thread_data;
 
-dirent_list* global_curr;
+list* global_curr;
 
 static uint32_t crc32_tab[] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -83,19 +83,20 @@ uint32_t crc32(uint32_t crc, const void *buf, size_t size)
 }
 
 
-void sortedInsert(struct dirent_list** head_ref, struct dirent_list* new_node)
+void sortedInsert(struct list** head, struct list* new_node)
 {
-    struct dirent_list* current;
-    /* Special case for the head end */
-    if (*head_ref == NULL || (strcmp((*head_ref)->entry->d_name, new_node->entry->d_name) >= 0))
+    struct list* current;
+    //take care of case when head is null or need to add to beginning
+
+    if (*head == NULL || (strcmp((*head)->entry->d_name, new_node->entry->d_name) >= 0))
     {
-        new_node->next = *head_ref;
-        *head_ref = new_node;
+        new_node->next = *head;
+        *head = new_node;
     }
     else
     {
-        /* Locate the node before the point of insertion */
-        current = *head_ref;
+        //find where a thing needs to be inserted
+        current = *head;
         while (current->next!=NULL && (strcmp(current->next->entry->d_name,new_node->entry->d_name) < 0))
         {
             current = current->next;
@@ -105,19 +106,19 @@ void sortedInsert(struct dirent_list** head_ref, struct dirent_list* new_node)
     }
 }
 
-void get_checksum(struct dirent_list *head)
+void get_checksum(struct list *head)
 {
-    struct dirent_list* curr = head;
+    struct list* curr = head;
     
         
         char abs_path[PATH_MAX+1];
         strcpy(abs_path,curr->dir);
         strcat(abs_path,curr->entry->d_name);
-	curr->text = malloc(sizeof(char)*(strlen(curr->entry->d_name)+11));
+    curr->text = malloc(sizeof(char)*(strlen(curr->entry->d_name)+11));
         FILE* f = fopen(abs_path, "r");
         if(f==NULL)
         {
-	  sprintf(curr->text,"%s ACCESS ERROR\n", curr->entry->d_name);
+      sprintf(curr->text,"%s ACCESS ERROR\n", curr->entry->d_name);
         }
         else{
            
@@ -134,7 +135,7 @@ void get_checksum(struct dirent_list *head)
             
             if(fclose(f)!=0)
             {
-	      sprintf(curr->text,"Error closing file %s",curr->entry->d_name);
+          sprintf(curr->text,"Error closing file %s",curr->entry->d_name);
                 
             }
 
@@ -143,9 +144,9 @@ void get_checksum(struct dirent_list *head)
         curr = curr->next;
     
 }
-void printList(struct dirent_list *head)
+void printList(struct list *head)
 {
-    struct dirent_list *temp = head;
+    struct list *temp = head;
     while(temp != NULL)
     {
         printf("%s\n", temp->text);
@@ -198,13 +199,13 @@ int main(int argc, char* argv[])
                  dir_name, strerror (errno));
         exit (EXIT_FAILURE);
     }
-    struct dirent_list* root = NULL;
+    struct list* root = NULL;
     struct dirent * file;
     while ((file = readdir(d)) != NULL) {
 
         //now add to linked list of files
         if(file->d_type != DT_DIR ){
-            struct dirent_list* new_node = (dirent_list*) malloc(sizeof(struct dirent_list));
+            struct list* new_node = (list*) malloc(sizeof(struct list));
             new_node->entry = file;
             new_node->dir = dir_name;
             //printf("%s\n", new_node->entry->d_name);
