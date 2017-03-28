@@ -52,8 +52,8 @@ void cat_exit(thread_data* data){
   //Tell the dogs and birds they can play
   if(cats==0)
     {
-      pthread_cond_signal(bird_cv);
-      pthread_cond_signal(dog_cv);
+      pthread_cond_broadcast(bird_cv);
+      pthread_cond_broadcast(dog_cv);
     }
   
   pthread_mutex_unlock(data->lock);
@@ -80,7 +80,7 @@ void dog_exit(thread_data* data){
   //cats can play only when dogs and birds are not playing
   if(birds==0 && dogs==0)
     {
-      pthread_cond_signal(cat_cv);
+      pthread_cond_broadcast(cat_cv);
     }
   pthread_mutex_unlock(data->lock);
 }
@@ -105,7 +105,7 @@ void bird_exit(thread_data* data){
   //cats can play when there are no birds or dogs
   if(birds==0 && dogs==0)
     {
-      pthread_cond_signal(cat_cv);
+      pthread_cond_broadcast(cat_cv);
     }
   pthread_mutex_unlock(data->lock);
 }
