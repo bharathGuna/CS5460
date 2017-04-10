@@ -13,7 +13,7 @@
  * under the terms of the GNU General Public License version 2 as published
  * by the Free Software Foundation.
  ======================================================================== */
-
+#define _GNU_SOURCE
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
@@ -27,14 +27,14 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
-
+#include <linux/jiffies.h>
 #include <asm/uaccess.h>
 
 #include "sleepy.h"
 
-//my includes
 #include <linux/wait.h>
 #include <linux/sched.h>
+#include <linux/string.h>
 
 MODULE_AUTHOR("Eugene A. Shatokhin, John Regehr");
 MODULE_LICENSE("GPL");
@@ -44,10 +44,6 @@ MODULE_LICENSE("GPL");
 /* parameters */
 static int sleepy_ndevices = SLEEPY_NDEVICES;
 
-//added params
-static wait_queue_head_t wait_queue[sleepy_ndevices];
-static int flag[10];
-
 module_param(sleepy_ndevices, int, S_IRUGO);
 /* ================================================================ */
 
@@ -55,6 +51,9 @@ static unsigned int sleepy_major = 0;
 static struct sleepy_dev *sleepy_devices = NULL;
 static struct class *sleepy_class = NULL;
 /* ================================================================ */
+
+static wait_queue_head_t * wait_queue;
+volatile int flags [10];
 
 int 
 sleepy_open(struct inode *inode, struct file *filp)
@@ -95,24 +94,25 @@ ssize_t
 sleepy_read(struct file *filp, char __user *buf, size_t count, 
 	    loff_t *f_pos)
 {
-  struct sleepy_dev *dev = (struct sleepy_dev *)filp->private_data;
-  ssize_t retval = 0;
+ struct sleepy_dev *dev = (struct sleepy_dev *)filp->private_data;
+ ssize_t retval = 0;
 	
-  if (mutex_lock_killable(&dev->sleepy_mutex))
+ if (mutex_lock_killable(&dev->sleepy_mutex))
     return -EINTR;
 	
   /* YOUR CODE HERE */
-  //using minor because when we create the devices we set the minor from 
-  // 0-9. If we get the minor for each devices we can use it to index
-  // into our waitqueue and flags arrays
 
-  printk("waking up device %d in read\n", MINOR(dev->cdev.dev));
-  flags[MINOR(dev->cdev.dev)]=1;
-  wake_up_interruptible(&wait_queues[MINOR(dev->cdev.dev)]);
+  // Determine which wait queue to wake up
+  int deviceNum = MINOR(dev->cdev.dev);
+  
+  flags[deviceNum] = 1;
+  wake_up_interruptible(&wait_queue[deviceNum]);
+  
   /* END YOUR CODE */
 	
-  mutex_unlock(&dev->sleepy_mutex);
-  return retval;
+ mutex_unlock(&dev->sleepy_mutex);
+ 
+ return retval;
 }
                 
 ssize_t 
@@ -121,27 +121,38 @@ sleepy_write(struct file *filp, const char __user *buf, size_t count,
 {
   struct sleepy_dev *dev = (struct sleepy_dev *)filp->private_data;
   ssize_t retval = 0;
-	
+   	
   if (mutex_lock_killable(&dev->sleepy_mutex))
     return -EINTR;
 	
   /* YOUR CODE HERE */
+  
   if(count != 4)
-    return -EINTR;
+  {
+    mutex_unlock(&dev->sleepy_mutex);
+    return EINVAL;
+  }  
 
   int* numSeconds = buf;
-  int did = MINOR(dev->cdev.dev);
-  printk("Trying to sleep device %d for %d seconds",did,*numSeconds);
   
-  if(numSeconds <=0)
-    return 0;
   
-  printk("device %d going to sleep", did);
+  // Determine which device this is and sleep it on the correct wait queue
+  int deviceNum = MINOR(dev->cdev.dev);
+  
+  // If it is valid sleep the process for the desired time
   unsigned long jiffies = msecs_to_jiffies((*numSeconds * 1000));	
+
+  //wait_queue_head_t * currentWQ = &wait_queue[deviceNum];  
+  
+  mutex_unlock(&dev->sleepy_mutex);
+  
+  unsigned long timeLeft = wait_event_interruptible_timeout(wait_queue[deviceNum], flags[deviceNum] != 0, jiffies);
+  flags[deviceNum] = 0;
+  
+  retval = jiffies_to_msecs(timeLeft) / 1000;
 
   /* END YOUR CODE */
 	
-  mutex_unlock(&dev->sleepy_mutex);
   return retval;
 }
 
@@ -236,6 +247,9 @@ sleepy_cleanup_module(int devices_to_destroy)
   /* [NB] sleepy_cleanup_module is never called if alloc_chrdev_region()
    * has failed. */
   unregister_chrdev_region(MKDEV(sleepy_major, 0), sleepy_ndevices);
+  
+  kfree(wait_queue);  
+
   return;
 }
 
@@ -288,6 +302,13 @@ sleepy_init_module(void)
     }
   }
   
+  wait_queue = kmalloc(sizeof(wait_queue_head_t)*sleepy_ndevices, GFP_KERNEL);
+
+  for(i = 0; i < sleepy_ndevices; i++)
+  {
+    init_waitqueue_head(&wait_queue[i]);
+  }
+
   printk ("sleepy module loaded\n");
 
   return 0; /* success */
@@ -309,3 +330,4 @@ sleepy_exit_module(void)
 module_init(sleepy_init_module);
 module_exit(sleepy_exit_module);
 /* ================================================================ */
+
