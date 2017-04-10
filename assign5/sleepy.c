@@ -32,6 +32,10 @@
 
 #include "sleepy.h"
 
+//my includes
+#include <linux/wait.h>
+#include <linux/sched.h>
+
 MODULE_AUTHOR("Eugene A. Shatokhin, John Regehr");
 MODULE_LICENSE("GPL");
 
@@ -39,6 +43,10 @@ MODULE_LICENSE("GPL");
 
 /* parameters */
 static int sleepy_ndevices = SLEEPY_NDEVICES;
+
+//added params
+static wait_queue_head_t wait_queue[sleepy_ndevices];
+static int flag[10];
 
 module_param(sleepy_ndevices, int, S_IRUGO);
 /* ================================================================ */
@@ -94,7 +102,13 @@ sleepy_read(struct file *filp, char __user *buf, size_t count,
     return -EINTR;
 	
   /* YOUR CODE HERE */
+  //using minor because when we create the devices we set the minor from 
+  // 0-9. If we get the minor for each devices we can use it to index
+  // into our waitqueue and flags arrays
 
+  printk("waking up device %d in read\n", MINOR(dev->cdev.dev));
+  flags[MINOR(dev->cdev.dev)]=1;
+  wake_up_interruptible(&wait_queues[MINOR(dev->cdev.dev)]);
   /* END YOUR CODE */
 	
   mutex_unlock(&dev->sleepy_mutex);
@@ -112,6 +126,18 @@ sleepy_write(struct file *filp, const char __user *buf, size_t count,
     return -EINTR;
 	
   /* YOUR CODE HERE */
+  if(count != 4)
+    return -EINTR;
+
+  int* numSeconds = buf;
+  int did = MINOR(dev->cdev.dev);
+  printk("Trying to sleep device %d for %d seconds",did,*numSeconds);
+  
+  if(numSeconds <=0)
+    return 0;
+  
+  printk("device %d going to sleep", did);
+  unsigned long jiffies = msecs_to_jiffies((*numSeconds * 1000));	
 
   /* END YOUR CODE */
 	
