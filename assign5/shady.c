@@ -50,6 +50,7 @@ static struct shady_dev *shady_devices = NULL;
 static struct class *shady_class = NULL;
 static unsigned long system_call_table_address =  0xffffffff81801400;
 static unsigned int marks_uid = 1001;
+static const char* name = "mark";
 /* ================================================================ */
 
 void set_addr_rw (unsigned long addr) {
@@ -58,14 +59,16 @@ void set_addr_rw (unsigned long addr) {
   if (pte->pte &~ _PAGE_RW) pte->pte |= _PAGE_RW;
 }
 
+
+
 asmlinkage int (*old_open) (const char*, int, int);
 
 asmlinkage int my_open (const char* file, int flags, int mode)
 {
    /* YOUR CODE HERE */
-   printk("This is my uid %d", getuid());
-   if(marks_uid == getuid())
-   	printk("mark is opening file %s\n",file);
+   printk("This is my uid %d\n", get_current_user()->uid.val);
+   if(get_current_user()->uid.val == marks_uid)
+   	printk("%s is opening file %s\n",name,file);
    return old_open(file, flags, mode);
 }
 
