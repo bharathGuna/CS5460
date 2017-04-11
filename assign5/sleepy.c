@@ -102,7 +102,7 @@ sleepy_read(struct file *filp, char __user *buf, size_t count,
 	
   /* YOUR CODE HERE */
 
-  // Determine which wait queue to wake up
+  //using the minor value as an index to find out what queue to wake up
   int deviceNum = MINOR(dev->cdev.dev);
   
   flags[deviceNum] = 1;
@@ -129,20 +129,17 @@ sleepy_write(struct file *filp, const char __user *buf, size_t count,
   
   if(count != 4)
   {
-    mutex_unlock(&dev->sleepy_mutex);
     return EINVAL;
   }  
 
   int* numSeconds = buf;
   
   
-  // Determine which device this is and sleep it on the correct wait queue
+  //using the minor value as an index to find out what queue to wake up
   int deviceNum = MINOR(dev->cdev.dev);
   
-  // If it is valid sleep the process for the desired time
+  //converting seconds to jiffies
   unsigned long jiffies = msecs_to_jiffies((*numSeconds * 1000));	
-
-  //wait_queue_head_t * currentWQ = &wait_queue[deviceNum];  
   
   mutex_unlock(&dev->sleepy_mutex);
   

