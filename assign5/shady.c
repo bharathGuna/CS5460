@@ -48,7 +48,23 @@ module_param(shady_ndevices, int, S_IRUGO);
 static unsigned int shady_major = 0;
 static struct shady_dev *shady_devices = NULL;
 static struct class *shady_class = NULL;
+static unsigned long system_call_table_address =  0xffffffff81801400;
+
 /* ================================================================ */
+
+void set_addr_rw (unsigned long addr) {
+  unsigned int level;
+  pte_t *pte = lookup_address(addr, &level);
+  if (pte->pte &~ _PAGE_RW) pte->pte |= _PAGE_RW;
+}
+
+asmlinkage int (*old_open) (const char*, int, int);
+
+asmlinkage int my_open (const char* file, int flags, int mode)
+{
+   /* YOUR CODE HERE */
+   return old_open(file, flags, mode);
+}
 
 int 
 shady_open(struct inode *inode, struct file *filp)
@@ -189,7 +205,9 @@ static void
 shady_cleanup_module(int devices_to_destroy)
 {
   int i;
-	
+  //set open to old open when module is unloaded 
+  ((unsigned long **)system_call_table_address)[__NR_open] = old_open;
+
   /* Get rid of character devices (if any exist) */
   if (shady_devices) {
     for (i = 0; i < devices_to_destroy; ++i) {
@@ -214,7 +232,9 @@ shady_init_module(void)
   int i = 0;
   int devices_to_destroy = 0;
   dev_t dev = 0;
-	
+  
+  set_addr_rw(system_call_table_address);
+
   if (shady_ndevices <= 0)
     {
       printk(KERN_WARNING "[target] Invalid value of shady_ndevices: %d\n", 
@@ -255,6 +275,14 @@ shady_init_module(void)
       goto fail;
     }
   }
+
+/* Save current value of open system call int old open and replace with my_open */
+  old_open = ((unsigned long **) system_call_table_address)[__NR_open];
+  
+  /*  Modify the sytem call table to RW */
+  set_addr_rw(system_call_table_address);
+  
+  ((unsigned long **) system_call_table_address)[__NR_open] = my_open;
   
   return 0; /* success */
 
